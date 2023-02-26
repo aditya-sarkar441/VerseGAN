@@ -157,7 +157,7 @@ if __name__ == '__main__':
                 print("VerseGAN:  epoch "+str(e+1)+" completed files  "+str(i)+"/"+str(l)+" Discriminator Loss= %.3f"%(lossD/i))
 
         # Save the weights of generator after every epoch
-        path = "/u/home/a/asarkar/scratch/language_identification/"+str(e+1)+".pth" 
+        path = "/u/home/a/asarkar/scratch/VerseGAN/"+str(e+1)+".pth" 
         torch.save(genr1.state_dict(),os.path.join(path,"genr1"))
         torch.save(genr2.state_dict(),os.path.join(path,"genr2"))
         torch.save(disc.state_dict(),os.path.join(path,"disc"))
