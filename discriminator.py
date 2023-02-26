@@ -15,11 +15,9 @@ from torch import optim
 
 # create the discriminator
 class discriminator(nn.Module):
-    def __init__(self, model1,model2):
+    def __init__(self):
         super(discriminator, self).__init__()
-        self.model1 = model1
-        self.model2 = model2
-
+        
         self.att1=nn.Linear(2*32,100) 
         self.att2= nn.Linear(100,1)
         
@@ -27,13 +25,13 @@ class discriminator(nn.Module):
 
         self.lang_classifier= nn.Sequential()
         self.lang_classifier.add_module('fc1',nn.Linear(2*32,48,bias=True))
-        self.lang_classifier.add_module('fc2',nn.Linear(48,32,bias=True))
+        self.lang_classifier.add_module('fc2',nn.Linear(48,1,bias=True))
         
         
-    def forward(self, x1,x2):
-        u1 = self.model1(x1)
-        u2 = self.model2(x2)        
-        ht_u = torch.cat((u1,u2), dim=0)  
+    def forward(self, ht_u):
+#         u1 = self.model1(x1)
+#         u2 = self.model2(x2)        
+#         ht_u = torch.cat((u1,u2), dim=0)  
         ht_u = torch.unsqueeze(ht_u, 0) 
         ha_u = torch.tanh(self.att1(ht_u))
         alp = torch.tanh(self.att2(ha_u))
@@ -46,6 +44,7 @@ class discriminator(nn.Module):
         u_vec = torch.bmm(al.view(batch_size, 1, Tb),ht_u.view(batch_size,Tb,D)) 
         u_vec = torch.squeeze(u_vec,0)
         
-        v_vec = self.lang_classifier(u_vec)      # Output layer  
+        # Output layer 
+        rorf = self.lang_classifier(u_vec)       
         
-        return (v_vec,u1,u2,u_vec)
+        return (rorf)

@@ -13,42 +13,55 @@ import random
 from torch.autograd import Variable
 from torch.autograd import Function
 from torch import optim
+from pytorch_metric_learning import losses
 
 # calling user defined functions
 from discriminator import discriminator
 from generator import generator
-import data 
+from data import lstm_data
 
-# initialize loss functions 
-def gen_loss(e1,e2):
-    loss_wssl = nn.CosineSimilarity()
-    m = nn.Sigmoid()
-    l1 = (loss_wssl(e1,e2))
-    return(m(l1))
+# initialize custom loss functions 
+class WSM_loss(nn.Module):
+    def __init__(self):
+        super(WSM_loss, self).__init__()
+        
+    def forward(self,e1,e2)
+        loss_wssl = nn.CosineSimilarity()
+        m = nn.Sigmoid()
+        l1 = loss_wssl(e1,e2)
+        return(m(l1))
     
-def disc_loss(v, o):
-    l2 = 
+class MSProduct(nn.Module):
+    def __init__(self, margin):
+        super(MSProduct, self).__init__()
+        self.margin = margin
     
-    
+    def forward(self,inp,label):
+        m = nn.LogSoftmax(dim=1)
+        cosdist = nn.CosineSimilarity(F.normalize(inp), F.normalize(label))
+        cosm = torch.acos(cosdist)+self.margin
+        cosdist = 1*torch.cos(cosm)
+        k = m(cosdist)
+        return(k)
+        
     
 if __name__ == '__main__':
     # initialize training
-    model1 = generator()
-    model2 = generator()
+    genr1 = generator()
+    genr2 = generator()
 
-    model1.cuda()
-    model2.cuda()
+    genr1.cuda()
+    genr2.cuda()
 
-    model = discriminator(model1,model2)
-    model.cuda()
+    disc = discriminator(genr1,genr2)
+    disc.cuda()
     
-    optimizer = optim.SGD(model.parameters(),lr = 0.01, momentum= 0.9)
+    # optimizers
+    optim_disc = optim.SGD(disc.parameters(),lr = 0.01, momentum= 0.9)
+    optim_genr1 = optim.SGD(genr1.parameters(),lr = 0.01, momentum= 0.9)
+    optim_genr2 = optim.SGD(genr2.parameters(),lr = 0.01, momentum= 0.9)
 
-    # custom losses
-    loss_lang = torch.nn.CrossEntropyLoss(reduction='mean')  
-
-    loss_lang.cuda()
-
+    # initialising epochs
     n_epoch = 20
     manual_seed = random.randint(1,10000)
     random.seed(manual_seed)
@@ -69,9 +82,14 @@ if __name__ == '__main__':
     # finished initialization
     print('#'*30)
     
-    model1.train()
-    model2.train()
-    model.train()
+    genr1.train()
+    genr2.train()
+    disc.train()
+    
+    # initialsing loss
+    msl = MSProduct(0.2)
+    wsml = WSM_loss()
+    
     
     for e in range(n_epoch):
         cost = 0.
@@ -87,9 +105,12 @@ if __name__ == '__main__':
             N,D=X.shape
 
             if N>look_back2:
-                model.zero_grad()
-
-                XX1,XX2,YY1,Yint = lstm_data(fn)
+                
+                #disc.zero_grad()
+                #gene1.zero_grad()
+                #gene2.zero_grad()
+                
+                XX1,XX2,YY1,YP1 = lstm_data(fn)
                 XNP=np.array(XX1)
                 if(np.isnan(np.sum(XNP))):
                     continue
@@ -104,20 +125,39 @@ if __name__ == '__main__':
                 X1 = Variable(XX1,requires_grad=False).cuda()
                 Y1 = Variable(YY1,requires_grad=False).cuda()
                 X2 = Variable(XX2,requires_grad=False).cuda()
-
-
-                fl,e1,e2,u = model.forward(X1,X2)   
+                YP1 = Variable(YP1,requires_grad=False).cuda()
                 
-                err_l = loss_lang(fl,Y1)
-                err_wssl = abs(loss_wssl(e1,e2))               
-                T_err = err_l + 0.25*err_wssl   # alpha = 0.25 in this case. Change it to get better output       
+                # initialise real vector
+                real = torch.cat((YP1,YP1),dim=0)
+                
+                # initialise fake vector
+                fake1 = genr1.forward(X1)
+                fake2 = genr2.forward(X2)
+                fake = torch.cat((fake1,fake2), dim=0)
 
-                T_err.backward()
-                optimizer.step()
-                cost = cost + T_err.item()
+                # training discriminator
+                disc_real = disc.forward(real)
+                lossD_real = msl.forward(disc_real,torch.ones_like(disc_real))
+                disc_fake = disc.forward(fake)
+                lossD_fake = msl.forward(disc_fake,torch.zeros_like(disc_fake))
+                lossD = 0.5*(lossD_real+lossD_fake)
+                disc.zero_grad()
+                lossD.backward(retain_graph=True)
+                optim_disc.step()
+                
+                # training generator
+                output = disc.foward(fake)
+                lossG = msl.forward(output, torch.ones_like(output)) + 0.4*wsml.forward(fake1, fake2)
+                genr1.zero_grad()
+                genr2.zero_grad()
+                lossG.backward()
+                optim_gen.step()
 
-                print("ZWSSL5:  epoch "+str(e+1)+" completed files  "+str(i)+"/"+str(l)+" Loss= %.3f"%(cost/i))
+                print("VerseGAN:  epoch "+str(e+1)+" completed files  "+str(i)+"/"+str(l)+" Generator Loss= %.3f"%(lossG/i))
+                print("VerseGAN:  epoch "+str(e+1)+" completed files  "+str(i)+"/"+str(l)+" Discriminator Loss= %.3f"%(lossD/i))
 
-        # Save model after every epoch
-        path = "/home/iit/Muralikrishna/shantanu_2/e1_e2_wssl/e1_e2_wssl_1/models/ZWSSL5_e"+str(e+1)+".pth" 
-        torch.save(model.state_dict(),path)
+        # Save the weights of generator after every epoch
+        path = "/u/home/a/asarkar/scratch/language_identification/"+str(e+1)+".pth" 
+        torch.save(genr1.state_dict(),os.path.join(path,"genr1"))
+        torch.save(genr2.state_dict(),os.path.join(path,"genr2"))
+        torch.save(disc.state_dict(),os.path.join(path,"disc"))

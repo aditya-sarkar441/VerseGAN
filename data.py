@@ -15,6 +15,12 @@ def gen_proxy():
     x=m[0:8]
     return(x.reshape(32,1))
 
+def gen_real_proxy(Y1):
+    # generate a vector of same dimension as Y1 (which is 32) and it
+    # should a correlation of at least 0.8 (>0.8) with 
+    # Y1.
+    
+
 def lstm_data(f):
     # read dataset
     df = pd.read_csv(f,encoding='utf-16',usecols=list(range(0,80))) # 80D BNF Features
@@ -77,6 +83,7 @@ def lstm_data(f):
     # form datasets
     Xdata1 = torch.from_numpy(Xdata1).float()
     Xdata2 = torch.from_numpy(Xdata2).float()
-    Ydata1 = torch.from_numpy(Y2).long()    
+    Ydata1 = torch.from_numpy(Y2).long()
+    Yproxy1 = torch.from_numpy(gen_real_proxy(Y1)).long()
     
-    return Xdata1,Xdata2,Ydata1,Y1
+    return Xdata1,Xdata2,Ydata1,Yproxy1
